@@ -2,11 +2,25 @@ name: Deploy to test
 
 on:
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Preview changes without uploading
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-test
+  cancel-in-progress: false
 
 jobs:
   deploy:
     name: Deploy app to test
     runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     environment:
       name: test
@@ -16,5 +30,57 @@ jobs:
       - name: Download repository
         uses: actions/checkout@v7
 
-      - name: Confirm destination
-        run: echo "Deploying to ${{ vars.DEPLOY_PATH }}"
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+          chmod 600 ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Verify deployment directory
+        env:
+          SSH_HOST: ${{ vars.SSH_HOST }}
+          SSH_USER: ${{ vars.SSH_USER }}
+          SSH_PORT: ${{ vars.SSH_PORT }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+        run: |
+          ssh \
+            -p "$SSH_PORT" \
+            -o BatchMode=yes \
+            "$SSH_USER@$SSH_HOST" \
+            "test -d '$DEPLOY_PATH'"
+
+      - name: Deploy application
+        env:
+          SSH_HOST: ${{ vars.SSH_HOST }}
+          SSH_USER: ${{ vars.SSH_USER }}
+          SSH_PORT: ${{ vars.SSH_PORT }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          RSYNC_OPTIONS=(
+            --archive
+            --verbose
+            --compress
+            --itemize-changes
+            --no-owner
+            --no-group
+            --no-perms
+          )
+
+          if [[ "$DRY_RUN" == "true" ]]; then
+            RSYNC_OPTIONS+=(--dry-run)
+          fi
+
+          rsync \
+            "${RSYNC_OPTIONS[@]}" \
+            -e "ssh -p $SSH_PORT -o BatchMode=yes" \
+            carterjohns/app/ \
+            "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/"
