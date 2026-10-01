@@ -1,4 +1,17 @@
 RewriteEngine On
 
-RewriteCond %{HTTPS} !=on
-RewriteRule ^ https://carterjohns.com%{REQUEST_URI} [R=302,L]
+# Redirect HTTP requests to HTTPS.
+RewriteCond %{SERVER_PORT} !=443
+RewriteRule ^(.*)$ https://carterjohns.com/app-test/$1 [R=302,L]
+
+AuthType Basic
+AuthName "Bird App Test"
+AuthBasicProvider file
+AuthUserFile /homepages/16/d172604367/htdocs/private-auth/app-test.htpasswd
+
+# Permit HTTP only far enough to perform the HTTPS redirect.
+# Require authentication for HTTPS requests.
+<RequireAny>
+    Require expr "%{SERVER_PORT} != 443"
+    Require valid-user
+</RequireAny>
