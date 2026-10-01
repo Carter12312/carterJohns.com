@@ -7,7 +7,7 @@ on:
         description: Preview changes without uploading
         required: true
         type: boolean
-        default: true
+        default: false
 
 permissions:
   contents: read
