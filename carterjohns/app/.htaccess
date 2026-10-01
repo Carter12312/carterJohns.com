@@ -1,0 +1,4 @@
+RewriteEngine On
+
+RewriteCond %{HTTPS} !=on
+RewriteRule ^ https://carterjohns.com%{REQUEST_URI} [R=302,L]
